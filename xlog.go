@@ -526,3 +526,7 @@ type settings struct {
 }
 
 var logging loggingT
+
+func GetSeverityNames() []string {
+	return severity.Name
+}
