@@ -33,3 +33,11 @@ func SetFileMaxBackups(p int) {
 func SwitchContextual(b bool) {
 	logging.settings.contextualLoggingEnabled = b
 }
+
+func SetSeverityName(s string) {
+	sl, ok := severity.ByName(s)
+	if !ok {
+		sl = severity.InfoLog
+	}
+	SetSeverity(sl)
+}
