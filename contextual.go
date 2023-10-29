@@ -5,8 +5,8 @@ import (
 	"sync"
 
 	"github.com/go-logr/logr"
-	"github.com/tomhjx/xlog/internal/option"
 	"github.com/tomhjx/xlog/lib/zapr"
+	"github.com/tomhjx/xlog/option"
 )
 
 type logWriter struct {
@@ -74,7 +74,10 @@ func ClearLogger() {
 }
 
 func InitGlobalLogger() {
-	SetLogger(zapr.New(option.LoggerOption{}))
+
+	c := option.LogOption{}
+	c.OutputPath = logging.file
+	SetLogger(zapr.New(c))
 }
 
 var loggingLoggerOnce sync.Once

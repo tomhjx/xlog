@@ -57,8 +57,6 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
-	"github.com/tomhjx/xlog/internal/option"
-	"github.com/tomhjx/xlog/internal/severity"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -312,19 +310,6 @@ func DPanicOnBugs(enabled bool) Option {
 	return func(zl *zapLogger) {
 		zl.panicMessages = enabled
 	}
-}
-
-func New(op option.LoggerOption) logr.Logger {
-
-	encoderConfig := zap.NewProductionEncoderConfig()
-	encoderConfig.EncodeLevel = func(l zapcore.Level, enc zapcore.PrimitiveArrayEncoder) {
-		enc.AppendString(severity.Flag(LevelSeverity(l)))
-	}
-
-	zc := zap.NewProductionConfig()
-	zc.EncoderConfig = encoderConfig
-	zl, _ := zc.Build()
-	return NewLogger(zl)
 }
 
 var _ logr.LogSink = &zapLogger{}

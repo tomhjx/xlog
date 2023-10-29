@@ -1,7 +1,6 @@
 package xlog
 
 import (
-	"flag"
 	"fmt"
 	"strconv"
 	"sync"
@@ -51,7 +50,7 @@ func (s *severityValue) Set(value string) error {
 		}
 		threshold = severity.Severity(v)
 	}
-	logging.stderrThreshold.set(threshold)
+	logging.severity.set(threshold)
 	return nil
 }
 
@@ -117,16 +116,9 @@ func (l *loggingT) printDepth(s severity.Severity, logger *logWriter, depth int,
 }
 
 func (l *loggingT) output(s severity.Severity, logger *logWriter, depth int, msg string) {
-
-	var isLocked = true
-	l.mu.Lock()
-	defer func() {
-		if isLocked {
-			// Unlock before returning in case that it wasn't done already.
-			l.mu.Unlock()
-		}
-	}()
-
+	if s < l.severity.Severity {
+		return
+	}
 	depth += 3
 	if s == severity.ErrorLog {
 		logger.WithCallDepth(depth).Error(nil, msg)
@@ -135,9 +127,6 @@ func (l *loggingT) output(s severity.Severity, logger *logWriter, depth int, msg
 	}
 
 	if s == severity.FatalLog {
-
-		l.mu.Unlock()
-		isLocked = false
 
 		// If we got here via Exit rather than Fatal, print no stacks.
 		if atomic.LoadUint32(&fatalNoStacks) > 0 {
@@ -159,11 +148,17 @@ func (l *loggingT) printfDepth(s severity.Severity, logger *logWriter, depth int
 
 // if loggr is specified, will call loggr.Error, otherwise output with logging module.
 func (l *loggingT) errorS(err error, logger *logWriter, depth int, msg string, keysAndValues ...interface{}) {
+	if severity.ErrorLog < l.severity.Severity {
+		return
+	}
 	logger.WithCallDepth(depth+1).Error(err, msg, keysAndValues...)
 }
 
 // if loggr is specified, will call loggr.Info, otherwise output with logging module.
 func (l *loggingT) infoS(logger *logWriter, depth int, msg string, keysAndValues ...interface{}) {
+	if severity.InfoLog < l.severity.Severity {
+		return
+	}
 	logger.WithCallDepth(depth+1).Info(msg, keysAndValues...)
 }
 
@@ -248,14 +243,6 @@ func (v Verbose) InfoSDepth(depth int, msg string, keysAndValues ...interface{})
 		return
 	}
 	logging.infoS(v.logger, depth, msg, keysAndValues...)
-}
-
-// Deprecated: Use ErrorS instead.
-func (v Verbose) Error(err error, msg string, args ...interface{}) {
-	if !v.enabled {
-		return
-	}
-	logging.errorS(err, v.logger, 0, msg, args...)
 }
 
 // ErrorS is equivalent to the global Error function, guarded by the value of v.
@@ -529,64 +516,13 @@ type settings struct {
 	contextualLoggingEnabled bool
 	logger                   *logWriter
 
-	// Boolean flags. Not handled atomically because the flag.Value interface
-	// does not let us avoid the =true, and that shorthand is necessary for
-	// compatibility. TODO: does this matter enough to fix? Seems unlikely.
-	toStderr     bool // The -logtostderr flag.
-	alsoToStderr bool // The -alsologtostderr flag.
+	severity severityValue
 
-	// Level flag. Handled atomically.
-	stderrThreshold severityValue // The -stderrthreshold flag.
-
-	verbosity Level // V logging level, the value of the -v flag/
-
-	// If non-empty, overrides the choice of directory in which to write logs.
-	// See createLogDirs for the full list of possible destinations.
-	logDir string
-
-	// If non-empty, specifies the path of the file to write logs. mutually exclusive
-	// with the log_dir option.
-	logFile string
-
-	// When logFile is specified, this limiter makes sure the logFile won't exceeds a certain size. When exceeds, the
-	// logFile will be cleaned up. If this value is 0, no size limitation will be applied to logFile.
-	logFileMaxSizeMB uint64
-
-	// If true, do not add the prefix headers, useful when used with SetOutput
-	skipHeaders bool
-
-	// If true, do not add the headers to log files
-	skipLogHeaders bool
-
-	// If true, add the file directory to the header
-	addDirHeader bool
-
-	// If true, messages will not be propagated to lower severity log levels
-	oneOutput bool
+	verbosity      Level // V logging level
+	file           string
+	fileMaxSizeMB  int
+	fileMaxAgeDay  int
+	fileMaxBackups int
 }
 
 var logging loggingT
-var commandLine flag.FlagSet
-
-func init() {
-
-	// commandLine.StringVar(&logging.logDir, "log_dir", "", "If non-empty, write log files in this directory (no effect when -logtostderr=true)")
-	// commandLine.StringVar(&logging.logFile, "log_file", "", "If non-empty, use this log file (no effect when -logtostderr=true)")
-	// commandLine.Uint64Var(&logging.logFileMaxSizeMB, "log_file_max_size", 1800,
-	// 	"Defines the maximum size a log file can grow to (no effect when -logtostderr=true). Unit is megabytes. "+
-	// 		"If the value is 0, the maximum file size is unlimited.")
-	// commandLine.BoolVar(&logging.toStderr, "logtostderr", true, "log to standard error instead of files")
-	// commandLine.BoolVar(&logging.alsoToStderr, "alsologtostderr", false, "log to standard error as well as files (no effect when -logtostderr=true)")
-	logging.setVState(0)
-	// commandLine.Var(&logging.verbosity, "v", "number for the log level verbosity")
-	// commandLine.BoolVar(&logging.addDirHeader, "add_dir_header", false, "If true, adds the file directory to the header of the log messages")
-	// commandLine.BoolVar(&logging.skipHeaders, "skip_headers", false, "If true, avoid header prefixes in the log messages")
-	// commandLine.BoolVar(&logging.oneOutput, "one_output", false, "If true, only write logs to their native severity level (vs also writing to each lower severity level; no effect when -logtostderr=true)")
-	// commandLine.BoolVar(&logging.skipLogHeaders, "skip_log_headers", false, "If true, avoid headers when opening log files (no effect when -logtostderr=true)")
-	logging.stderrThreshold = severityValue{
-		Severity: severity.ErrorLog, // Default stderrThreshold is ERROR.
-	}
-	// commandLine.Var(&logging.stderrThreshold, "stderrthreshold", "logs at or above this threshold go to stderr when writing to files and stderr (no effect when -logtostderr=true or -alsologtostderr=false)")
-
-	logging.settings.contextualLoggingEnabled = true
-}
