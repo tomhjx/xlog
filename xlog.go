@@ -120,7 +120,7 @@ func (l *loggingT) output(s severity.Severity, logger *logWriter, depth int, msg
 		return
 	}
 	depth += 3
-	if s == severity.ErrorLog {
+	if s == severity.ErrorLog || s == severity.FatalLog {
 		logger.WithCallDepth(depth).Error(nil, msg)
 	} else {
 		logger.WithCallDepth(depth).Info(msg)
