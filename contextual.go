@@ -83,7 +83,9 @@ func InitGlobalLogger() {
 var loggingLoggerOnce sync.Once
 
 func GlobalLogger() *logWriter {
-	loggingLoggerOnce.Do(InitGlobalLogger)
+	if logging.logger == nil {
+		loggingLoggerOnce.Do(InitGlobalLogger)
+	}
 	return logging.logger
 }
 
